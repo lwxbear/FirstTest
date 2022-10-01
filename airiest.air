@@ -845,3 +845,77 @@ for line in f.readlines():
 749-12925501-1
 750-122015518-3
 
+
+
+buy_num = Decimal(100)
+postage = Decimal(50)
+col_name = ['序号', '货号', '尺码', '数量', '得物5.0', '得物3.0', '运费', '合计', '日期']
+row_data = [None, None, None, str(buy_num), None, None, str(postage), None, '9.22-10.2']
+
+f = open('/Users/guanji/Desktop/test.txt')
+total_row = 0
+page_row_count = 0
+page_count = 0
+pre_line_sku = None
+wb = Workbook()
+ws = wb.active
+
+for line in f.readlines():
+    if total_row % 36 == 0:
+        page_count += 1
+        print(f'page_count:{page_count}')
+        ws.merge_cells(f'A{total_row + 1}:I{total_row + 3}')
+        ws.cell(row=total_row + 1, column=1, value='VASS账目明细表').font = Font(name=u'宋体', size=26)
+        ws.cell(row=total_row + 1, column=1).alignment = Alignment(horizontal='center', vertical='center')
+        total_row += 3
+        col = 0
+        for name in col_name:
+            col += 1
+            ws.cell(row=total_row + 1, column=col, value=name).font = Font(name=u'宋体', size=11)
+            ws.cell(row=total_row + 1, column=col).alignment = Alignment(horizontal='center', vertical='center')
+        total_row += 1
+        page_row_count = 0  # 每页第一行重置为 None
+
+    # 解析一行信息
+    tmp = line.split(',')
+    sku_count = int(tmp[0].strip())  # 第几个货号
+    row_data[0] = page_row_count + 1
+    row_data[1] = tmp[1].strip()  # 货号
+    row_data[2] = tmp[2].strip()  # 尺码
+    row_data[4] = tmp[3].strip()  # 买价
+    row_data[5] = tmp[4].strip().strip('\n')  # 卖价
+    row_data[7] = str(buy_num * Decimal(row_data[4]) - postage)  # 数量*买价-运费
+    # print('row_data', row_data)
+    col = 0
+    for value in row_data:
+        col += 1
+        # print(col, value, pre_line_sku, page_row_count)
+        if col == 2 and value == pre_line_sku and page_row_count != 0:  # 特殊情况货号为空
+            continue
+        ws.cell(row=total_row + 1, column=col, value=value).font = Font(name=u'宋体', size=11)
+        ws.cell(row=total_row + 1, column=col).alignment = Alignment(horizontal='center', vertical='center')
+
+    total_row += 1
+    page_row_count += 1
+    pre_line_sku = row_data[1]
+
+    if page_row_count % 30 == 0:  # 合计
+        ws.cell(row=total_row + 1, column=1, value='总合计').font = Font(name=u'宋体', size=11)
+        ws.cell(row=total_row + 1, column=1).alignment = Alignment(horizontal='center', vertical='center')
+        ws.cell(row=total_row + 1, column=9, value=row_data[8]).font = Font(name=u'宋体', size=11)
+        ws.cell(row=total_row + 1, column=9).alignment = Alignment(horizontal='center', vertical='center')
+        for col in range(4, 9):
+            total_value = Decimal(0)
+            for values in ws.iter_cols(min_row=total_row-29, max_row=total_row, min_col=col, max_col=col, values_only=True):
+                # print('values', values)
+                for value in values:
+                    total_value += Decimal(value)
+            ws.cell(row=total_row + 1, column=col, value=str(total_value)).font = Font(name=u'宋体', size=11)
+            ws.cell(row=total_row + 1, column=col).alignment = Alignment(horizontal='center', vertical='center')
+        total_row += 1
+        ws.merge_cells(f'A{total_row + 1}:I{total_row + 1}')
+        ws.cell(row=total_row + 1, column=1, value='林明阳').font = Font(name=u'宋体', size=11)
+        ws.cell(row=total_row + 1, column=1).alignment = Alignment(horizontal='right', vertical='center')
+        total_row += 1
+
+wb.save("/Users/guanji/Desktop/test.xlsx")
