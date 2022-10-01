@@ -1,0 +1,94 @@
+# -*- encoding=utf8 -*-
+__author__ = "lwx"
+
+from airtest.core.api import *
+import decimal
+
+auto_setup(__file__)
+
+from poco.drivers.android.uiautomation import AndroidUiautomationPoco
+
+poco = AndroidUiautomationPoco(use_airtest_input=True, screenshot_each_action=False)
+
+sub_price = decimal.Decimal(20)
+
+write_file = open('/Users/lwx/Desktop/price1.txt', 'a')
+
+f = open('/Users/lwx/Desktop/num1.txt', 'r')
+for line in f.readlines():
+    tmp = line.split('-', 1)
+    line_num = int(tmp[0].strip())
+    sku_num = tmp[1].strip().strip('\n')
+    print(line_num, sku_num)
+    try:
+        poco('com.shizhuang.duapp:id/etSearch').click()
+        text(sku_num, search=True)
+        poco("android.widget.FrameLayout").child("android.widget.LinearLayout").offspring(
+            "android.view.ViewGroup").offspring("com.shizhuang.duapp:id/recyclerView").child(
+            "com.shizhuang.duapp:id/search_root")[0].click()
+        sellBottom = poco("android.widget.FrameLayout").child("android.widget.LinearLayout").offspring(
+            "com.shizhuang.duapp:id/bottomButtonViews").offspring("com.shizhuang.duapp:id/btnGroup").offspring(
+            "com.shizhuang.duapp:id/bottomSellOrAskPriceView")
+        sellBottom.click()
+        btnSure = poco('com.shizhuang.duapp:id/btnSure')
+        if btnSure.exists():
+            btnSure.click()
+        current_sku_num = poco('com.shizhuang.duapp:id/tvSubTitle').get_text()
+        if sku_num == current_sku_num:
+            skuViewGroups = poco("com.shizhuang.duapp:id/skusView").child(
+                "com.shizhuang.duapp:id/rvSpecification").child(
+                "com.shizhuang.duapp:id/root_view")
+            sku_list = []
+            min_price = decimal.Decimal(1e+10)  # 默认最小值10^10
+            for sku in skuViewGroups:
+                tvTitle = sku.child('com.shizhuang.duapp:id/tvTitle')
+                tvPrice = sku.child('com.shizhuang.duapp:id/tvPrice')
+                if tvTitle.exists() and tvPrice.exists():
+                    title = tvTitle.get_text()
+                    price = tvPrice.get_text().replace('\xa5', '')
+                    if price.find('--') == -1:  # 有价
+                        sku.click()
+                        poco('com.shizhuang.duapp:id/etInput').click()
+                        text(price)
+                        tvRealMoney = poco('com.shizhuang.duapp:id/groupPrice').offspring(
+                            'com.shizhuang.duapp:id/tvRealMoney')
+                        total = decimal.Decimal(price)
+                        min_price = min_price.min(total)
+                        for moneyTextView in tvRealMoney:
+                            money = moneyTextView.get_text().replace('\xa5', '')
+                            if money.find('-') == 0:
+                                total += decimal.Decimal(money)
+                        sku_list.append([title, price, str(total)])
+                        poco('转到上一层级').click()
+                        sellBottom.click()
+                        if btnSure.exists():
+                            btnSure.click()
+                    else:  # 无价
+                        sku_list.append([title, '--', '--'])
+
+            if min_price == decimal.Decimal(1e+10):  # 处理无价
+                print(f'该货号全部无价：{sku_num}')
+                continue
+
+            for sku_price in sku_list:  # 处理无价
+                if sku_price[1] == '--' and sku_price[2] == '--':
+                    sku_price[1] = str(min_price)
+                    sku_price[2] = str(min_price - sub_price)
+            for sku_price in sku_list:
+                line = f'{line_num},{sku_num},{sku_price[0]},{sku_price[1]},{sku_price[2]}\n'
+                write_file.writelines(line)
+                write_file.flush()
+
+            print(sku_list)
+            # 返回起始搜索
+            poco("android.widget.FrameLayout").child("android.widget.LinearLayout").offspring(
+                "android.widget.FrameLayout").child("android.widget.LinearLayout").offspring(
+                "com.shizhuang.duapp:id/tvCloseDialog").click()
+            poco('com.shizhuang.duapp:id/homeAsUpBtn').click()
+            poco('com.shizhuang.duapp:id/back').click()
+        else:
+            print(f'货号不匹配：{sku_num}!={current_sku_num}')
+            exit()
+    except:
+        print(f'异常:{sku_num}')
+        exit()
